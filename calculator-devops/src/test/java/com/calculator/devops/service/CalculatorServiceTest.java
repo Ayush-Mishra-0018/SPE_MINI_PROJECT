@@ -42,5 +42,16 @@ class CalculatorServiceTest {
         assertEquals(5.0, result);
     }
 
+    @Test
+    void shouldThrowExceptionWhenDividingByZero() {
+        CalculatorService calculatorService = new CalculatorService();
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> calculatorService.divide(10, 0)
+        );
+
+    }
+
 
 }
