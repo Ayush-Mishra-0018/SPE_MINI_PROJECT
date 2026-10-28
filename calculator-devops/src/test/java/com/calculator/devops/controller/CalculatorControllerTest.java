@@ -1,3 +1,4 @@
+
 package com.calculator.devops.controller;
 
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(CalculatorController.class)
 class CalculatorControllerTest {
+
     @MockitoBean
     private CalculatorService calculatorService;
 
@@ -35,5 +37,17 @@ class CalculatorControllerTest {
                 .andExpect(jsonPath("$.result").value(30.0));
     }
 
-
+    @Test
+    void shouldReturnBadRequestWhenParameterIsMissing() throws Exception {
+        mockMvc.perform(get("/api/v1/add")
+                        .param("a", "10"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message")
+                        .value("Missing or invalid request parameter"))
+                .andExpect(jsonPath("$.path").value("/api/v1/add"));
+    }
 }
+
+
