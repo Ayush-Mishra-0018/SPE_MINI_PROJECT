@@ -1,5 +1,6 @@
 package com.calculator.devops.controller;
 
+import com.calculator.devops.dto.CalculatorResponse;
 import com.calculator.devops.service.CalculatorService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,22 +18,39 @@ public class CalculatorController {
     }
 
     @GetMapping("/add")
-    public double add(@RequestParam double a, @RequestParam double b) {
-        return calculatorService.add(a, b);
+    public CalculatorResponse add(
+            @RequestParam double a,
+            @RequestParam double b
+    ) {
+        double result = calculatorService.add(a, b);
+        return new CalculatorResponse("add", a, b, result);
     }
 
     @GetMapping("/subtract")
-    public double subtract(@RequestParam double a, @RequestParam double b) {
-        return calculatorService.subtract(a, b);
+    public CalculatorResponse subtract(
+            @RequestParam double a,
+            @RequestParam double b
+    ) {
+        double result = calculatorService.subtract(a, b);
+        return new CalculatorResponse("subtract", a, b, result);
     }
 
     @GetMapping("/multiply")
-    public double multiply(@RequestParam double a, @RequestParam double b) {
-        return calculatorService.multiply(a, b);
+    public CalculatorResponse multiply(
+            @RequestParam double a,
+            @RequestParam double b
+    ) {
+        double result = calculatorService.multiply(a, b);
+        return new CalculatorResponse("multiply", a, b, result);
     }
 
     @GetMapping("/divide")
-    public double divide(@RequestParam double a, @RequestParam double b) {
-        return calculatorService.divide(a, b);
+    public CalculatorResponse divide(
+            @RequestParam double a,
+            @RequestParam double b
+    ) {
+        double result = calculatorService.divide(a, b);
+        return new CalculatorResponse("divide", a, b, result);
     }
 }
+
