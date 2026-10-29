@@ -1,268 +1,526 @@
-# Calculator DevOps Project
+# Calculator DevOps --- End-to-End CI/CD Pipeline
 
-A Spring Boot REST API for basic arithmetic operations, containerized using Docker and deployed using Docker Compose with an Nginx reverse proxy. This project demonstrates application development, automated testing, version control, containerization, and deployment practices.
+A Spring Boot calculator REST API built with Java 21 and Maven, tested
+with JUnit 5 and Spring MockMvc, packaged as a multi-stage Docker image,
+and deployed using Docker Compose behind an Nginx reverse proxy. Jenkins
+automates the build, test, image publishing, deployment, and
+health-verification steps.
 
-## Features
+> **Status as of 29 October 2026:** Jenkins Build #7 completed
+> successfully. The Docker image was pushed to Docker Hub, and the API
+> and Nginx Compose services were both observed healthy. Automatic
+> GitHub triggering and email notifications are not yet
+> configured/verified.
 
-- REST API for addition, subtraction, multiplication, and division.
-- Structured JSON responses for successful operations.
-- HTTP 400 error responses for invalid requests and division by zero.
-- Unit tests and integration tests using JUnit 5 and Spring testing tools.
-- Spring Boot Actuator health endpoint.
-- Multi-stage Docker build using Maven and Java 21.
-- Non-root user for running the application container.
-- Docker Compose deployment with Nginx as a reverse proxy.
-- Health checks and restart policies for containers.
-- GitHub feature branches and pull requests for changes.
+## Contents
 
-## Technology Stack
+-   [Overview and architecture](#overview-and-architecture)
+-   [Technology stack](#technology-stack)
+-   [Repository structure](#repository-structure)
+-   [API endpoints](#api-endpoints)
+-   [Run locally](#run-locally)
+-   [Docker](#docker)
+-   [Docker Compose](#docker-compose)
+-   [Tests](#tests)
+-   [Jenkins CI/CD pipeline](#jenkins-cicd-pipeline)
+-   [Git workflow](#git-workflow)
+-   [Troubleshooting and security](#troubleshooting-and-security)
+-   [Status and remaining work](#status-and-remaining-work)
+-   [Project links](#project-links)
 
-- **Java 21**
-- **Spring Boot**
-- **Maven**
-- **JUnit 5**
-- **Spring MockMvc**
-- **Git and GitHub**
-- **Docker**
-- **Docker Compose**
-- **Nginx**
+## Overview and architecture
 
-## API Endpoints
+The application supports addition, subtraction, multiplication, and
+division through HTTP GET endpoints. Responses are JSON. Invalid
+requests and division by zero are handled with HTTP `400 Bad Request`
+and a structured JSON error. Spring Boot Actuator provides
+`/actuator/health`.
 
-The application is exposed through Nginx on host port `8081` in the current development environment.
+``` text
+Developer pushes code
+        |
+        v
+GitHub repository (main)
+        |
+        | Automatic trigger: pending configuration
+        v
+Jenkins: calculator-devops-pipeline
+        |
+        +--> Checkout
+        +--> Maven Build
+        +--> Test + publish JUnit XML
+        +--> Build Docker image
+        +--> Push versioned tag + latest to Docker Hub
+        +--> Deploy with Docker Compose
+        +--> Verify /actuator/health
+                          |
+                          v
+             Docker Compose bridge network
+                   /                 \
+                  v                   v
+          Nginx reverse proxy    Spring Boot API
+          host port 8081         container port 8081
+```
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/v1/add?a=10&b=20` | Adds two numbers |
-| GET | `/api/v1/subtract?a=20&b=8` | Subtracts the second number from the first |
-| GET | `/api/v1/multiply?a=6&b=7` | Multiplies two numbers |
-| GET | `/api/v1/divide?a=10&b=2` | Divides the first number by the second |
-| GET | `/actuator/health` | Checks application health |
+In the local development environment, Jenkins uses host port `8080`.
+Nginx is therefore published on host port `8081`, mapping to Nginx
+container port `8080`. Nginx forwards requests to
+`http://calculator-api:8081` over the Compose network.
 
-### Example Requests
+## Technology stack
 
-**Addition**
+-   Java 21 / Eclipse Temurin
+-   Spring Boot and Spring Boot Actuator
+-   Maven and Maven Wrapper
+-   JUnit 5 and Spring MockMvc
+-   Git and GitHub
+-   Jenkins declarative pipeline
+-   Docker and Docker Compose
+-   Nginx reverse proxy
+-   Docker Hub image registry
 
-```bash
-curl "http://localhost:8081/api/v1/add?a=10&b=20"
+## Repository structure
+
+The project is in `calculator-devops/` within the repository.
+
+``` text
+SPE_MINI_PROJECT/
+├── README.md
+└── calculator-devops/
+    ├── Dockerfile
+    ├── .dockerignore
+    ├── .gitignore
+    ├── Jenkinsfile
+    ├── docker-compose.yml
+    ├── nginx.conf
+    ├── pom.xml
+    ├── mvnw
+    ├── .mvn/
+    └── src/
+        ├── main/java/com/calculator/devops/
+        └── test/java/com/calculator/devops/
+            ├── service/CalculatorServiceTest.java
+            ├── controller/CalculatorControllerTest.java
+            └── CalculatorDevopsApplicationTests.java
+```
+
+This is a summary of the main files, not an exhaustive listing of every
+source file.
+
+## API endpoints
+
+The deployed local API is reachable through Nginx at
+`http://localhost:8081`.
+
+  Method   Endpoint                      Purpose
+  -------- ----------------------------- ---------------------------
+  GET      `/api/v1/add?a=10&b=5`        Add two numbers
+  GET      `/api/v1/subtract?a=10&b=5`   Subtract `b` from `a`
+  GET      `/api/v1/multiply?a=10&b=5`   Multiply two numbers
+  GET      `/api/v1/divide?a=10&b=5`     Divide `a` by `b`
+  GET      `/actuator/health`            Application health status
+
+### Examples
+
+``` bash
+curl "http://localhost:8081/api/v1/add?a=10&b=5"
 ```
 
 Example response:
 
-```json
+``` json
 {
   "operation": "add",
   "a": 10.0,
-  "b": 20.0,
-  "result": 30.0
+  "b": 5.0,
+  "result": 15.0
 }
 ```
 
-**Subtraction**
-
-```bash
-curl "http://localhost:8081/api/v1/subtract?a=20&b=8"
+``` bash
+curl "http://localhost:8081/api/v1/subtract?a=10&b=5"
+curl "http://localhost:8081/api/v1/multiply?a=10&b=5"
+curl "http://localhost:8081/api/v1/divide?a=10&b=5"
+curl -fsS "http://localhost:8081/actuator/health"
 ```
 
-**Multiplication**
+Division by zero:
 
-```bash
-curl "http://localhost:8081/api/v1/multiply?a=6&b=7"
+``` bash
+curl -i "http://localhost:8081/api/v1/divide?a=10&b=0"
 ```
 
-**Division by zero**
+Observed response: HTTP `400 Bad Request`, with JSON similar to:
 
-```bash
-curl "http://localhost:8081/api/v1/divide?a=10&b=0"
+``` json
+{
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Division by zero is not allowed",
+  "path": "/api/v1/divide"
+}
 ```
 
-Division by zero returns HTTP `400 Bad Request` with a structured JSON error response.
+The health endpoint returned a status of `UP` during the verified
+Jenkins deployment.
 
-## Run Locally
+## Run locally
 
 ### Prerequisites
 
-- Java 21
-- Git
-- Maven, or use the included Maven Wrapper
+-   Git
+-   Java 21 JDK
+-   Included Maven Wrapper (`./mvnw`)
 
-Clone the repository:
-
-```bash
+``` bash
 git clone https://github.com/Ayush-Mishra-0018/SPE_MINI_PROJECT.git
 cd SPE_MINI_PROJECT/calculator-devops
+java -version
+javac -version
+./mvnw -version
 ```
 
-Run the tests:
+Run tests and build:
 
-```bash
-./mvnw test
+``` bash
+./mvnw -B test
+./mvnw -B clean package
 ```
 
-Build the application:
+Run the JAR:
 
-```bash
-./mvnw clean package
-```
-
-Run the generated JAR:
-
-```bash
+``` bash
 java -jar target/calculator-devops-0.0.1-SNAPSHOT.jar
 ```
 
-The application runs on port `8081` by default.
+Then test from another terminal:
 
-## Docker Image
-
-The application image is published on Docker Hub.
-
-**Docker Hub:** https://hub.docker.com/r/ayushmishra0018/calculator-devops
-
-Pull the image:
-
-```bash
-docker pull ayushmishra0018/calculator-devops:latest
+``` bash
+curl "http://localhost:8081/api/v1/add?a=10&b=5"
+curl -fsS "http://localhost:8081/actuator/health"
 ```
 
-Run the API container directly:
+Stop the foreground application with `Ctrl+C`.
 
-```bash
-docker run -d \
-  --name calculator-api \
-  -p 8081:8081 \
-  ayushmishra0018/calculator-devops:latest
+## Docker
+
+### Dockerfile design
+
+The Dockerfile uses a multi-stage build:
+
+1.  **Build stage:** Maven with Java 21. Maven configuration and wrapper
+    files are copied before application source to improve
+    dependency-layer caching. Dependencies are downloaded and the
+    executable JAR is packaged.
+2.  **Runtime stage:** A Java 21 JRE image receives the built JAR,
+    rather than the full Maven build environment.
+3.  **Non-root execution:** The runtime process uses a dedicated
+    `spring` user.
+4.  **Port declaration:** The image declares `EXPOSE 8081`.
+5.  **Build context hygiene:** `.dockerignore` excludes generated
+    output, IDE files, Git metadata, logs, and environment files.
+
+Build and run a standalone image from `calculator-devops/`:
+
+``` bash
+docker build -t calculator-devops:local .
+docker run -d --name calculator-api -p 8081:8081 calculator-devops:local
+curl "http://localhost:8081/api/v1/add?a=10&b=5"
+curl -fsS "http://localhost:8081/actuator/health"
 ```
 
-Check the health endpoint:
+Inspect and stop it:
 
-```bash
-curl http://localhost:8081/actuator/health
-```
-
-To stop and remove the standalone container:
-
-```bash
+``` bash
+docker ps
+docker logs calculator-api
 docker stop calculator-api
 docker rm calculator-api
 ```
 
-## Docker Architecture
+**Note:** The standalone container and Compose stack both use host port
+`8081`. Stop one before starting the other.
 
-The Dockerfile uses a **multi-stage build**:
+## Docker Compose
 
-1. **Build stage:** Uses Maven with Java 21 to download dependencies, compile the application, run tests, and package the executable JAR.
-2. **Runtime stage:** Uses a Java 21 JRE image and copies only the generated JAR into the runtime image.
-3. **Security:** Runs the application as a dedicated non-root user.
-4. **Image optimization:** Uses `.dockerignore` to exclude unnecessary files from the build context.
+The Compose file runs two services:
 
-## Docker Compose Deployment
+-   **`calculator-api`:** Spring Boot API on container port `8081`,
+    accessible to other Compose services.
+-   **`nginx`:** Reverse proxy on container port `8080`, mapped to host
+    port `8081`.
 
-The project uses Docker Compose to run two services:
+Both services share a dedicated Docker bridge network. The configuration
+includes API and Nginx health checks, `restart: unless-stopped`, and a
+dependency condition so Nginx waits for the API to become healthy.
 
-- **calculator-api:** The Spring Boot application, accessible to other containers on port `8081`.
-- **nginx:** A reverse proxy that accepts requests on container port `8080` and forwards them to the calculator API.
+From `calculator-devops/`, run:
 
-The host exposes Nginx on port `8081`. This avoids a conflict with Jenkins, which uses host port `8080` in the current development environment.
-
-### Start the application
-
-From the `calculator-devops` directory:
-
-```bash
+``` bash
 docker compose up -d --build
-```
-
-Check service status:
-
-```bash
 docker compose ps
-```
-
-View logs:
-
-```bash
 docker compose logs -f
 ```
 
-Test the deployed application:
+Test through Nginx:
 
-```bash
-curl "http://localhost:8081/api/v1/add?a=10&b=20"
-curl http://localhost:8081/actuator/health
+``` bash
+curl "http://localhost:8081/api/v1/add?a=10&b=5"
+curl "http://localhost:8081/api/v1/subtract?a=10&b=5"
+curl "http://localhost:8081/api/v1/multiply?a=10&b=5"
+curl "http://localhost:8081/api/v1/divide?a=10&b=5"
+curl -fsS "http://localhost:8081/actuator/health"
 ```
 
-Stop the services:
+Stop the stack:
 
-```bash
+``` bash
 docker compose down
 ```
 
-### Deployment Features
+### Deployment verification already performed
 
-- Dedicated Docker bridge network for communication between services.
-- API health check using Spring Boot Actuator.
-- Nginx health check.
-- Nginx starts after the API reports healthy.
-- Automatic container restart policies.
-- Environment-based configuration for the API port and Docker image tag.
+The following commands were run from the repository root:
 
-## Testing
+``` bash
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+docker compose -f calculator-devops/docker-compose.yml ps
+```
 
-The project includes:
+Both services were reported `Up` and `healthy`:
 
-- **Service unit tests:** Verify arithmetic operations and division-by-zero handling.
-- **Controller tests:** Verify API responses and HTTP error handling using MockMvc.
-- **Application integration tests:** Verify application-level behavior.
+-   `calculator-devops-calculator-api-1`, using
+    `ayushmishra0018/calculator-devops:7`
+-   `calculator-devops-nginx-1`, publishing host port `8081` to
+    container port `8080`
+
+## Tests
+
+The test sources include:
+
+-   `CalculatorServiceTest.java`: service-level tests for addition,
+    subtraction, multiplication, division, and division by zero.
+-   `CalculatorControllerTest.java`: MockMvc controller tests for API
+    responses and HTTP error handling.
+-   `CalculatorDevopsApplicationTests.java`: application-level MockMvc
+    tests.
 
 Run all tests:
 
-```bash
-./mvnw test
+``` bash
+./mvnw -B test
 ```
 
-Maven generates test reports under:
+Maven Surefire writes XML reports under `target/surefire-reports/`.
+Jenkins publishes `calculator-devops/target/surefire-reports/*.xml`
+using the JUnit publisher.
 
-```text
-target/surefire-reports/
+## Jenkins CI/CD pipeline
+
+### Job configuration
+
+-   **Job name:** `calculator-devops-pipeline`
+-   **Local Jenkins URL:** `http://localhost:8080`
+-   **SCM branch:** `main`
+-   **Pipeline script path:** `calculator-devops/Jenkinsfile`
+-   **Verified build:** `#7`
+
+### Pipeline stages
+
+1.  **Checkout** --- checks out the configured Git repository.
+2.  **Build** --- runs `./mvnw -B -DskipTests clean package`. Tests are
+    deliberately run in the next stage.
+3.  **Test** --- runs `./mvnw -B test` and publishes Surefire XML
+    reports to Jenkins.
+4.  **Build Docker Image** --- builds the image and tags it with the
+    Jenkins build number and `latest`.
+5.  **Push to Docker Hub** --- logs in using a Jenkins-managed
+    credential, then pushes the versioned tag and `latest`.
+6.  **Deploy with Docker Compose** --- exports the image username and
+    build tag, then runs `docker compose up -d --no-build`.
+7.  **Verify Deployment** --- retries a request to
+    `http://localhost:8081/actuator/health`; on failure, the pipeline
+    prints container status and Compose logs.
+
+The pipeline also timestamps log output, disables concurrent builds,
+prints a success/failure message, and prunes unused Docker images at the
+end.
+
+Key commands:
+
+``` bash
+./mvnw -B -DskipTests clean package
+./mvnw -B test
+docker compose up -d --no-build
+curl -fsS --retry 30 --retry-delay 2 --retry-connrefused \
+  http://localhost:8081/actuator/health
 ```
 
-## Git and GitHub Workflow
+### Credentials and image tags
 
-The project uses Git for version control and GitHub for remote source management.
+The Jenkins credential ID used for Docker Hub is `dockerhub-creds`. The
+pipeline binds the username and token to environment variables during
+the push stage and uses `--password-stdin` for authentication. Do not
+commit access tokens or print them in logs.
 
-Development follows a feature-branch workflow:
+The image name is `ayushmishra0018/calculator-devops`. The pipeline
+publishes a build-specific tag, such as `:7`, and the rolling `:latest`
+tag.
 
-1. Create a branch for a feature or improvement.
-2. Implement and test the changes.
-3. Commit changes with descriptive messages.
-4. Push the branch to GitHub.
-5. Open a pull request and merge it into `main`.
+### Verified Build #7
 
-Feature branches and pull requests have been used for Docker containerization and Docker Compose/Nginx deployment.
+Build #7 finished with `SUCCESS`. The observed results included:
 
-## Project Status
+-   Build and test stages succeeded.
+-   Docker image push succeeded.
+-   The pushed image digest was
+    `sha256:57f0891d0b0650815caa3611310157b4ee8ffda4f94febda98516ecf71d5fcea`.
+-   Docker Compose started/recreated the API and Nginx services.
+-   The health request through `http://localhost:8081/actuator/health`
+    returned a response with `"status":"UP"`.
+-   The pipeline printed `CI/CD pipeline completed successfully!`.
 
-### Completed so far
+### Automatic trigger --- pending
 
-- Spring Boot calculator REST API.
-- Unit and integration tests.
-- Structured error handling and Actuator health endpoint.
-- Multi-stage Dockerfile and `.dockerignore`.
-- Docker Compose configuration for the API and Nginx.
-- Successful local container deployment with both services healthy.
-- Successful API and health-check requests through Nginx.
-- Docker image pushed to Docker Hub.
+The Jenkins Build Triggers page was inspected. At that point,
+**neither** `GitHub hook trigger for GITScm polling` nor `Poll SCM` was
+checked. An automatic trigger still needs to be configured and tested.
 
-### Planned / remaining work
+A GitHub webhook requires a Jenkins URL reachable from GitHub's servers.
+`http://localhost:8080` is only a local address and cannot be used as a
+public webhook destination. If a reachable endpoint is not available,
+Poll SCM is an alternative accepted by the assignment.
 
-- Configure the Jenkins declarative pipeline.
-- Automate testing, image building, Docker Hub publishing, and deployment through Jenkins.
-- Configure Jenkins credentials and build notifications.
-- Capture final demo screenshots and prepare the project report.
+### Email notifications --- pending
 
-## Repository
+SMTP configuration and notification delivery for both successful and
+failed builds still need to be configured and tested. This requirement
+should only be marked complete after an actual notification has been
+received.
 
-GitHub: https://github.com/Ayush-Mishra-0018/SPE_MINI_PROJECT
+## Git workflow
 
-Docker Hub: https://hub.docker.com/r/ayushmishra0018/calculator-devops
+The repository uses feature/fix branches and pull requests merged into
+`main`. The recent history checked locally confirmed these merged PRs:
+
+-   PR #3 --- Jenkins pipeline feature
+-   PR #4 --- Jenkins shell interpolation fix
+-   PR #5 --- Jenkins loop syntax fix
+-   PR #6 --- Jenkins pipeline cleanup and health-check fix
+
+The local `main` branch was at merge commit `bd3d285`
+(`Merge pull request #6 from Ayush-Mishra-0018/fix/jenkins-pipeline-cleanup`)
+when checked.
+
+Useful commands:
+
+``` bash
+git status
+git fetch origin
+git branch -a
+git log origin/main --oneline -10
+```
+
+The application `.gitignore` is at `calculator-devops/.gitignore`; the
+Docker-specific `.dockerignore` controls the Docker build context.
+
+## Troubleshooting and security
+
+### Jenkins Docker permissions
+
+These commands were verified to work:
+
+``` bash
+sudo -u jenkins docker ps
+sudo -u jenkins docker compose version
+```
+
+### Java version mismatch
+
+Check both the shell user and Jenkins service user:
+
+``` bash
+java -version
+javac -version
+sudo -u jenkins java -version
+sudo -u jenkins javac -version
+```
+
+Java 21 JDK was installed and `javac` was corrected to version 21 in the
+current environment.
+
+### Docker Hub push failure
+
+-   Confirm the Jenkins credential ID is `dockerhub-creds`.
+-   Confirm the token has the required read/write permissions.
+-   Update the token only in Jenkins Credentials.
+-   Never put tokens in source control or paste them into logs.
+
+### Deployment health failure
+
+``` bash
+docker ps
+docker compose -f calculator-devops/docker-compose.yml ps
+docker compose -f calculator-devops/docker-compose.yml logs --tail=100
+curl -i http://localhost:8081/actuator/health
+```
+
+### Security notes
+
+-   Keep credentials and secrets out of Git.
+-   Keep Docker Hub credentials in Jenkins' credential store.
+-   Do not expose Jenkins publicly without proper authentication and
+    network protections.
+-   Use version-specific image tags for reproducibility; `latest` is
+    convenient but mutable.
+
+## Status and remaining work
+
+### Completed and verified
+
+-   [x] Calculator REST endpoints.
+-   [x] Structured division-by-zero error response.
+-   [x] Actuator health endpoint.
+-   [x] JUnit 5 service tests and MockMvc controller/application tests.
+-   [x] Maven build and test workflow.
+-   [x] Multi-stage Java 21 Dockerfile.
+-   [x] Non-root runtime user and `.dockerignore`.
+-   [x] Docker Compose API + Nginx stack.
+-   [x] Compose health checks, network, dependency condition, and
+    restart policies.
+-   [x] Public Docker Hub image and versioned image push.
+-   [x] Jenkins build, tests/report publishing, image build/push,
+    deployment, and health verification.
+-   [x] Jenkins Build #7 succeeded.
+-   [x] Both Compose services observed healthy.
+-   [x] Feature/fix branches and merged pull requests confirmed.
+
+### Remaining work
+
+-   [ ] Configure and verify an automatic Jenkins trigger (GitHub
+    webhook or Poll SCM).
+-   [ ] Configure SMTP and test success/failure email notifications.
+-   [ ] Push a small change and capture evidence of automatic pipeline
+    execution.
+-   [ ] Capture screenshots: successful Jenkins run, published test
+    results, email notification, `docker ps`, and sample API responses.
+-   [ ] Prepare the required 2--3 page PDF report with architecture
+    diagram, pipeline stages, challenges/solutions, and screenshots.
+-   [ ] Demonstrate a code push, pipeline run, deployment, and healthy
+    API.
+
+## Project links
+
+-   **GitHub repository:**
+    https://github.com/Ayush-Mishra-0018/SPE_MINI_PROJECT
+-   **Docker Hub image:**
+    https://hub.docker.com/r/ayushmishra0018/calculator-devops
+-   **Jenkins (local):** http://localhost:8080
+-   **Deployed API (local):** http://localhost:8081
+-   **Health endpoint:** http://localhost:8081/actuator/health
+
+------------------------------------------------------------------------
+
+This README records the work completed and verified so far. Update the
+checklist when the remaining trigger, email, report, and demonstration
+tasks are complete.
