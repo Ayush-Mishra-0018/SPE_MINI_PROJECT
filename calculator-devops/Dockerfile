@@ -1,11 +1,10 @@
-# Stage 1: Build the Spring Boot application
+﻿# Stage 1: Build the Spring Boot application
 
 FROM maven:3.9-eclipse-temurin-21 AS build
 
 WORKDIR /app
 
 # Copy Maven configuration and wrapper first
-
 # to take advantage of Docker layer caching.
 
 COPY pom.xml mvnw ./
@@ -26,6 +25,11 @@ RUN ./mvnw -B clean package
 # Stage 2: Run the application using a JRE only
 
 FROM eclipse-temurin:21-jre-jammy AS runtime
+
+# Install curl for the Docker Compose health check.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
