@@ -1,4 +1,3 @@
-iii
 pipeline {
     agent any
 
@@ -8,9 +7,9 @@ pipeline {
     }
 
     environment {
-        DOCKERHUB_USERNAME = 'ayushmishra0018'
         IMAGE_NAME = 'ayushmishra0018/calculator-devops'
         IMAGE_TAG = "${BUILD_NUMBER}"
+        DOCKERHUB_USERNAME = 'ayushmishra0018'
     }
 
     stages {
@@ -22,29 +21,36 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'chmod +x mvnw'
-                sh './mvnw -B -DskipTests clean package'
+                dir('calculator-devops') {
+                    sh 'chmod +x mvnw'
+                    sh './mvnw -B -DskipTests clean package'
+                }
             }
         }
 
         stage('Test') {
             steps {
-                sh './mvnw -B test'
+                dir('calculator-devops') {
+                    sh './mvnw -B test'
+                }
             }
             post {
                 always {
-                    junit 'target/surefire-reports/*.xml'
+                    junit allowEmptyResults: true,
+                          testResults: 'calculator-devops/target/surefire-reports/*.xml'
                 }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh '''
-                    docker build \
-                      -t ${IMAGE_NAME}:${IMAGE_TAG} \
-                      -t ${IMAGE_NAME}:latest .
-                '''
+                dir('calculator-devops') {
+                    sh '''
+                        docker build \
+                            -t ${IMAGE_NAME}:${IMAGE_TAG} \
+                            -t ${IMAGE_NAME}:latest .
+                    '''
+                }
             }
         }
 
@@ -60,8 +66,9 @@ pipeline {
                     sh '''
                         set +x
                         echo "$DOCKER_TOKEN" | docker login \
-                          --username "$DOCKER_USER" \
-                          --password-stdin
+                            --username "$DOCKER_USER" \
+                            --password-stdin
+
                         docker push ${IMAGE_NAME}:${IMAGE_TAG}
                         docker push ${IMAGE_NAME}:latest
                         docker logout
@@ -72,31 +79,35 @@ pipeline {
 
         stage('Deploy with Docker Compose') {
             steps {
-                sh '''
-                    export DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME}
-                    export IMAGE_TAG=${IMAGE_TAG}
-                    docker compose up -d --build
-                '''
+                dir('calculator-devops') {
+                    sh '''
+                        export DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME}"
+                        export IMAGE_TAG="${IMAGE_TAG}"
+
+                        docker compose up -d --no-build
+                    '''
+                }
             }
         }
 
         stage('Verify Deployment') {
             steps {
                 sh '''
-                    for i in $(seq 1 30); do
-                      if curl -fsS \
+                    if curl -fsS \
+                        --retry 30 \
+                        --retry-delay 2 \
+                        --retry-connrefused \
                         http://localhost:8081/actuator/health \
-                        > /tmp/calculator-health.json; then
-                        cat /tmp/calculator-health.json
-                        exit 0
-                      fi
-                      sleep 2
-                    done
+                        -o /tmp/calculator-health.json; then
 
-                    echo "Application health check failed"
-                    docker compose ps
-                    docker compose logs --tail=100
-                    exit 1
+                        cat /tmp/calculator-health.json
+                    else
+                        echo "Application health check failed"
+                        docker ps
+                        docker compose -f "$WORKSPACE/calculator-devops/docker-compose.yml" ps
+                        docker compose -f "$WORKSPACE/calculator-devops/docker-compose.yml" logs --tail=100
+                        exit 1
+                    fi
                 '''
             }
         }
@@ -106,12 +117,13 @@ pipeline {
         success {
             echo 'CI/CD pipeline completed successfully!'
         }
+
         failure {
             echo 'CI/CD pipeline failed. Check the stage logs.'
         }
+
         always {
             sh 'docker image prune -f || true'
         }
     }
 }
-
