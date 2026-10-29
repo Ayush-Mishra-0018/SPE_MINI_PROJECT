@@ -1,0 +1,29 @@
+# Maven build output
+
+target/
+
+# IDE configuration
+
+.idea/
+.vscode/
+*.iml
+
+# Git metadata
+
+.git/
+.gitignore
+
+# Logs
+
+*.log
+
+# OS-generated files
+
+.DS_Store
+Thumbs.db
+
+# Local environment files
+
+.env
+.env.*
+!.env.example
