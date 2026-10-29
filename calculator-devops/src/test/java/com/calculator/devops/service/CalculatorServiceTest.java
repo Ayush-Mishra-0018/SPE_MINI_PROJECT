@@ -12,7 +12,7 @@ class CalculatorServiceTest {
 
         double result = calculatorService.add(10, 20);
 
-        assertEquals(31.0, result);
+        assertEquals(30.0, result);
     }
 
     @Test
