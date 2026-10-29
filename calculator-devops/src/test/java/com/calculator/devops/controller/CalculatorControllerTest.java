@@ -60,4 +60,21 @@ class CalculatorControllerTest {
                         .value("Missing or invalid request parameter"))
                 .andExpect(jsonPath("$.path").value("/api/v1/add"));
     }
+
+
+    @Test
+    void shouldReturnBadRequestWhenDividingByZero() throws Exception {
+        when(calculatorService.divide(10.0, 0.0))
+                .thenThrow(new IllegalArgumentException("Division by zero"));
+
+        mockMvc.perform(get("/api/v1/divide")
+                        .param("a", "10")
+                        .param("b", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Division by zero"))
+                .andExpect(jsonPath("$.path").value("/api/v1/divide"));
+    }
+
 }
