@@ -113,17 +113,47 @@ pipeline {
         }
     }
 
+    
     post {
         success {
             echo 'CI/CD pipeline completed successfully!'
+
+            emailext(
+                to: 'mishraayush0018@gmail.com',
+                subject: "SUCCESS: ${JOB_NAME} #${BUILD_NUMBER}",
+                body: """\
+                    <h2>Pipeline Successful</h2>
+                    <p><b>Job:</b> ${JOB_NAME}</p>
+                    <p><b>Build:</b> #${BUILD_NUMBER}</p>
+                    <p><b>Status:</b> SUCCESS</p>
+                    <p><b>Docker Image:</b> ${IMAGE_NAME}:${IMAGE_TAG}</p>
+                    <p><b>Console Output:</b> <a href="${BUILD_URL}console">View Logs</a></p>
+                """,
+                mimeType: 'text/html'
+            )
         }
 
         failure {
             echo 'CI/CD pipeline failed. Check the stage logs.'
+
+            emailext(
+                to: 'mishraayush0018@gmail.com',
+                subject: "FAILURE: ${JOB_NAME} #${BUILD_NUMBER}",
+                body: """\
+                    <h2>Pipeline Failed</h2>
+                    <p><b>Job:</b> ${JOB_NAME}</p>
+                    <p><b>Build:</b> #${BUILD_NUMBER}</p>
+                    <p><b>Status:</b> FAILURE</p>
+                    <p><b>Console Output:</b> <a href="${BUILD_URL}console">View Logs</a></p>
+                    <p>Open the console logs to identify the failed stage.</p>
+                """,
+                mimeType: 'text/html'
+            )
         }
 
         always {
             sh 'docker image prune -f || true'
         }
     }
+
 }
