@@ -1,4 +1,4 @@
-ii
+iii
 pipeline {
     agent any
 
@@ -83,7 +83,7 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 sh '''
-                    for i in \$(seq 1 30); do
+                    for i in $(seq 1 30); do
                       if curl -fsS \
                         http://localhost:8081/actuator/health \
                         > /tmp/calculator-health.json; then
