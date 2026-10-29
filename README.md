@@ -1,134 +1,167 @@
-# Calculator DevOps --- End-to-End CI/CD Pipeline
+# End-to-End CI/CD Pipeline for a Calculator REST API
 
-A Spring Boot calculator REST API built with Java 21 and Maven, tested
-with JUnit 5 and Spring MockMvc, packaged as a multi-stage Docker image,
-and deployed using Docker Compose behind an Nginx reverse proxy. Jenkins
-automates the build, test, image publishing, deployment, and
-health-verification steps.
+**Student Name:** Ayush Mishra  
+**Roll Number:** IMT2023129  
+**Course:** Software Production Engineering (SPE)  
+**Institute:** International Institute of Information Technology Bangalore (IIIT-B)
 
-> **Status as of 29 October 2026:** Jenkins Build #7 completed
-> successfully. The Docker image was pushed to Docker Hub, and the API
-> and Nginx Compose services were both observed healthy. Automatic
-> GitHub triggering and email notifications are not yet
-> configured/verified.
+**GitHub Repository:** [SPE_MINI_PROJECT](https://github.com/Ayush-Mishra-0018/SPE_MINI_PROJECT)  
+**Docker Hub Repository:** [ayushmishra0018/calculator-devops](https://hub.docker.com/r/ayushmishra0018/calculator-devops)
 
-## Contents
+---
 
--   [Overview and architecture](#overview-and-architecture)
--   [Technology stack](#technology-stack)
--   [Repository structure](#repository-structure)
--   [API endpoints](#api-endpoints)
--   [Run locally](#run-locally)
--   [Docker](#docker)
--   [Docker Compose](#docker-compose)
--   [Tests](#tests)
--   [Jenkins CI/CD pipeline](#jenkins-cicd-pipeline)
--   [Git workflow](#git-workflow)
--   [Troubleshooting and security](#troubleshooting-and-security)
--   [Status and remaining work](#status-and-remaining-work)
--   [Project links](#project-links)
+## 1. Project Overview
 
-## Overview and architecture
+This project implements an end-to-end Continuous Integration and Continuous Deployment (CI/CD) pipeline for a Calculator REST API developed using Spring Boot.
 
-The application supports addition, subtraction, multiplication, and
-division through HTTP GET endpoints. Responses are JSON. Invalid
-requests and division by zero are handled with HTTP `400 Bad Request`
-and a structured JSON error. Spring Boot Actuator provides
-`/actuator/health`.
+The objective is to automate the complete software delivery workflow, beginning with a code change pushed to GitHub and ending with the updated application deployed in Docker containers.
 
-``` text
-Developer pushes code
-        |
-        v
-GitHub repository (main)
-        |
-        | Automatic trigger: pending configuration
-        v
-Jenkins: calculator-devops-pipeline
-        |
-        +--> Checkout
-        +--> Maven Build
-        +--> Test + publish JUnit XML
-        +--> Build Docker image
-        +--> Push versioned tag + latest to Docker Hub
-        +--> Deploy with Docker Compose
-        +--> Verify /actuator/health
-                          |
-                          v
-             Docker Compose bridge network
-                   /                 \
-                  v                   v
-          Nginx reverse proxy    Spring Boot API
-          host port 8081         container port 8081
-```
+Jenkins orchestrates the pipeline. It checks out the source code, builds the application, runs automated tests, publishes test reports, builds a Docker image, pushes the image to Docker Hub, deploys the application using Docker Compose, verifies the deployment, and sends email notifications.
 
-In the local development environment, Jenkins uses host port `8080`.
-Nginx is therefore published on host port `8081`, mapping to Nginx
-container port `8080`. Nginx forwards requests to
-`http://calculator-api:8081` over the Compose network.
+The deployment consists of two services:
 
-## Technology stack
+- **Calculator API:** A Spring Boot application that implements arithmetic operations.
+- **Nginx:** A reverse proxy that exposes the application through port `8081` on the host machine.
 
--   Java 21 / Eclipse Temurin
--   Spring Boot and Spring Boot Actuator
--   Maven and Maven Wrapper
--   JUnit 5 and Spring MockMvc
--   Git and GitHub
--   Jenkins declarative pipeline
--   Docker and Docker Compose
--   Nginx reverse proxy
--   Docker Hub image registry
+The project demonstrates source control, automated testing, continuous integration, containerization, image publishing, automated deployment, health checks, and build notifications in one workflow.
 
-## Repository structure
+## 2. Technology Stack
 
-The project is in `calculator-devops/` within the repository.
+| Component | Technology |
+|---|---|
+| Programming language | Java |
+| Application framework | Spring Boot |
+| Build tool | Maven |
+| Testing | JUnit 5, Spring Boot Test, MockMvc |
+| Source control | Git |
+| Source code hosting | GitHub |
+| CI/CD orchestration | Jenkins |
+| Containerization | Docker |
+| Multi-container deployment | Docker Compose |
+| Reverse proxy | Nginx |
+| Container registry | Docker Hub |
+| Health monitoring | Spring Boot Actuator |
+| Build notifications | Jenkins Email Extension Plugin |
 
-``` text
+## 3. Repository Structure
+
+The project is organized into application source code, automated tests, container configuration, CI/CD pipeline configuration, and documentation.
+
+```text
 SPE_MINI_PROJECT/
-├── README.md
 └── calculator-devops/
+    ├── src/
+    │   ├── main/
+    │   │   ├── java/
+    │   │   │   └── com/calculator/devops/
+    │   │   │       ├── CalculatorDevopsApplication.java
+    │   │   │       ├── controller/
+    │   │   │       │   └── CalculatorController.java
+    │   │   │       └── service/
+    │   │   │           └── CalculatorService.java
+    │   │   └── resources/
+    │   │       └── application.properties
+    │   └── test/
+    │       └── java/com/calculator/devops/
+    │           ├── CalculatorDevopsApplicationTests.java
+    │           ├── controller/
+    │           │   └── CalculatorControllerTest.java
+    │           └── service/
+    │               └── CalculatorServiceTest.java
     ├── Dockerfile
     ├── .dockerignore
-    ├── .gitignore
-    ├── Jenkinsfile
     ├── docker-compose.yml
-    ├── nginx.conf
+    ├── Jenkinsfile
     ├── pom.xml
-    ├── mvnw
-    ├── .mvn/
-    └── src/
-        ├── main/java/com/calculator/devops/
-        └── test/java/com/calculator/devops/
-            ├── service/CalculatorServiceTest.java
-            ├── controller/CalculatorControllerTest.java
-            └── CalculatorDevopsApplicationTests.java
+    └── README.md
 ```
 
-This is a summary of the main files, not an exhaustive listing of every
-source file.
+The tree represents the main project components. The exact file structure can be checked against the current GitHub repository.
 
-## API endpoints
+### 3.1 Main Application Files
 
-The deployed local API is reachable through Nginx at
-`http://localhost:8081`.
+#### `CalculatorDevopsApplication.java`
 
-  Method   Endpoint                      Purpose
-  -------- ----------------------------- ---------------------------
-  GET      `/api/v1/add?a=10&b=5`        Add two numbers
-  GET      `/api/v1/subtract?a=10&b=5`   Subtract `b` from `a`
-  GET      `/api/v1/multiply?a=10&b=5`   Multiply two numbers
-  GET      `/api/v1/divide?a=10&b=5`     Divide `a` by `b`
-  GET      `/actuator/health`            Application health status
+This is the Spring Boot entry point. It starts the Spring application and initializes the application context.
 
-### Examples
+#### `CalculatorController.java`
 
-``` bash
-curl "http://localhost:8081/api/v1/add?a=10&b=5"
+The controller exposes the calculator's REST endpoints. It accepts HTTP requests, reads the input parameters, invokes the service layer, and returns appropriate HTTP responses.
+
+#### `CalculatorService.java`
+
+The service layer implements the arithmetic operations:
+
+- Addition
+- Subtraction
+- Multiplication
+- Division
+
+It also handles division-by-zero validation so that invalid arithmetic operations produce an appropriate error.
+
+#### `application.properties`
+
+This file contains application configuration, including server and management endpoint settings.
+
+#### `CalculatorServiceTest.java`
+
+This test class verifies the arithmetic logic independently of the HTTP layer.
+
+#### `CalculatorControllerTest.java`
+
+This test class verifies the controller's HTTP behaviour, including successful requests, missing parameters, invalid numeric input, and division-by-zero handling.
+
+#### `CalculatorDevopsApplicationTests.java`
+
+This class includes application-context testing and integration testing to verify that the application starts and that application components work together.
+
+#### `pom.xml`
+
+The Maven project file defines dependencies, build configuration, Java version settings, and test execution configuration.
+
+#### `Dockerfile`
+
+This file defines how the application is packaged into a Docker image using a multi-stage build.
+
+#### `.dockerignore`
+
+This file excludes unnecessary files from the Docker build context, reducing the amount of data sent to the Docker daemon.
+
+#### `docker-compose.yml`
+
+This file defines the Calculator API and Nginx services, their networking, port mappings, health checks, and restart policies.
+
+#### `Jenkinsfile`
+
+This file contains the Jenkins Declarative Pipeline. It defines the stages that automate testing, image creation, publishing, deployment, verification, and notifications.
+
+#### `README.md`
+
+This file documents the application, setup instructions, API endpoints, testing, and deployment.
+
+## 4. Calculator REST API
+
+The application provides four arithmetic endpoints and one health endpoint.
+
+| HTTP Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/v1/add?a=10&b=5` | Addition |
+| GET | `/api/v1/subtract?a=10&b=5` | Subtraction |
+| GET | `/api/v1/multiply?a=10&b=5` | Multiplication |
+| GET | `/api/v1/divide?a=10&b=5` | Division |
+| GET | `/actuator/health` | Application health |
+
+### 4.1 Example: Addition
+
+Request:
+
+```http
+GET /api/v1/add?a=10&b=5
 ```
 
-Example response:
+Successful response:
 
-``` json
+```json
 {
   "operation": "add",
   "a": 10.0,
@@ -137,22 +170,15 @@ Example response:
 }
 ```
 
-``` bash
-curl "http://localhost:8081/api/v1/subtract?a=10&b=5"
-curl "http://localhost:8081/api/v1/multiply?a=10&b=5"
-curl "http://localhost:8081/api/v1/divide?a=10&b=5"
-curl -fsS "http://localhost:8081/actuator/health"
-```
+The endpoint returns HTTP `200 OK` when the operation succeeds.
 
-Division by zero:
+### 4.2 Division by Zero
 
-``` bash
-curl -i "http://localhost:8081/api/v1/divide?a=10&b=0"
-```
+Division by zero is an invalid operation. The API returns HTTP `400 Bad Request` with a structured JSON response.
 
-Observed response: HTTP `400 Bad Request`, with JSON similar to:
+Example response:
 
-``` json
+```json
 {
   "status": 400,
   "error": "Bad Request",
@@ -161,366 +187,524 @@ Observed response: HTTP `400 Bad Request`, with JSON similar to:
 }
 ```
 
-The health endpoint returned a status of `UP` during the verified
-Jenkins deployment.
+This makes the API's error behaviour predictable and allows clients and automated tests to distinguish invalid requests from successful operations.
 
-## Run locally
+### 4.3 Health Endpoint
 
-### Prerequisites
+Spring Boot Actuator provides the health endpoint:
 
--   Git
--   Java 21 JDK
--   Included Maven Wrapper (`./mvnw`)
-
-``` bash
-git clone https://github.com/Ayush-Mishra-0018/SPE_MINI_PROJECT.git
-cd SPE_MINI_PROJECT/calculator-devops
-java -version
-javac -version
-./mvnw -version
+```http
+GET /actuator/health
 ```
 
-Run tests and build:
+Example response:
 
-``` bash
-./mvnw -B test
-./mvnw -B clean package
+```json
+{
+  "groups": ["liveness", "readiness"],
+  "status": "UP"
+}
 ```
 
-Run the JAR:
+The pipeline uses this endpoint to verify that the deployed application is responding after deployment.
 
-``` bash
-java -jar target/calculator-devops-0.0.1-SNAPSHOT.jar
+## 5. Automated Testing
+
+The project uses Maven and JUnit 5 to automate testing. Spring Boot testing support and MockMvc are used to test application and HTTP behaviour.
+
+The verified Jenkins test report contains 11 passing tests.
+
+| Test Class | Tests | Purpose |
+|---|---:|---|
+| `CalculatorDevopsApplicationTests` | 2 | Application context and integration behaviour |
+| `CalculatorControllerTest` | 4 | HTTP endpoint behaviour and error handling |
+| `CalculatorServiceTest` | 5 | Arithmetic operations and division by zero |
+| **Total** | **11** | **All tests passed** |
+
+The test suite covers:
+
+- Addition
+- Subtraction
+- Multiplication
+- Division
+- Division by zero
+- Successful controller requests
+- Missing request parameters
+- Invalid numeric input
+- Application startup and integration behaviour
+
+Run the tests locally using:
+
+```bash
+mvn clean test
 ```
 
-Then test from another terminal:
+Maven executes the tests and generates JUnit XML reports. Jenkins collects these reports and displays the test results through its build interface.
 
-``` bash
-curl "http://localhost:8081/api/v1/add?a=10&b=5"
-curl -fsS "http://localhost:8081/actuator/health"
+The verified pipeline run reported:
+
+- Total tests: 11
+- Passed: 11
+- Failed: 0
+- Skipped: 0
+
+Publishing test reports makes the results visible in Jenkins rather than requiring someone to inspect only the console logs.
+
+## 6. Docker Image Creation
+
+Docker packages the application and its runtime environment into an image. This allows the application to run consistently across different environments.
+
+### 6.1 Multi-Stage Docker Build
+
+The Dockerfile uses two stages.
+
+**Stage 1: Build stage**
+
+- Uses a Maven image with a JDK.
+- Copies Maven dependency metadata before copying application source code.
+- Builds the executable Spring Boot JAR.
+
+Copying dependency metadata separately can improve build caching because dependencies do not need to be downloaded again whenever only application source files change.
+
+**Stage 2: Runtime stage**
+
+- Uses a slim Java runtime image.
+- Copies the packaged JAR from the build stage.
+- Runs the application using a non-root user.
+- Exposes the application's internal port.
+
+Using a separate runtime image avoids carrying the full Maven build environment into the deployed container. Running as a non-root user also reduces unnecessary privileges.
+
+### 6.2 Docker Build Context
+
+The `.dockerignore` file excludes unnecessary files such as build output, Git metadata, IDE configuration, and local environment files.
+
+This keeps the Docker build context smaller and avoids copying irrelevant local files into the image build process.
+
+### 6.3 Docker Hub
+
+The image is published to:
+
+[Docker Hub: ayushmishra0018/calculator-devops](https://hub.docker.com/r/ayushmishra0018/calculator-devops)
+
+The pipeline publishes two tags:
+
+- A build-specific tag, such as `13`
+- The `latest` tag
+
+Example commands:
+
+```bash
+docker pull ayushmishra0018/calculator-devops:latest
+docker pull ayushmishra0018/calculator-devops:13
 ```
 
-Stop the foreground application with `Ctrl+C`.
+A build-specific tag identifies the image associated with a particular Jenkins build. The `latest` tag provides a convenient reference to the most recently published image.
 
-## Docker
+## 7. Docker Compose Deployment
 
-### Dockerfile design
+Docker Compose coordinates the multiple containers required by the deployment.
 
-The Dockerfile uses a multi-stage build:
+The project uses two services: the Calculator API and Nginx.
 
-1.  **Build stage:** Maven with Java 21. Maven configuration and wrapper
-    files are copied before application source to improve
-    dependency-layer caching. Dependencies are downloaded and the
-    executable JAR is packaged.
-2.  **Runtime stage:** A Java 21 JRE image receives the built JAR,
-    rather than the full Maven build environment.
-3.  **Non-root execution:** The runtime process uses a dedicated
-    `spring` user.
-4.  **Port declaration:** The image declares `EXPOSE 8081`.
-5.  **Build context hygiene:** `.dockerignore` excludes generated
-    output, IDE files, Git metadata, logs, and environment files.
+### 7.1 Calculator API Service
 
-Build and run a standalone image from `calculator-devops/`:
+The API service:
 
-``` bash
-docker build -t calculator-devops:local .
-docker run -d --name calculator-api -p 8081:8081 calculator-devops:local
-curl "http://localhost:8081/api/v1/add?a=10&b=5"
-curl -fsS "http://localhost:8081/actuator/health"
+- Runs the Spring Boot application.
+- Uses the image selected by the deployment pipeline.
+- Includes a health check using `/actuator/health`.
+- Uses a restart policy to improve recovery after unexpected stops.
+
+The API listens on its configured internal application port.
+
+### 7.2 Nginx Service
+
+The Nginx service:
+
+- Uses the `nginx:alpine` image.
+- Publishes host port `8081` and maps it to container port `8080`.
+- Forwards incoming requests to the Calculator API through the Docker network.
+- Has its own health check and restart policy.
+
+The user accesses the application through Nginx at:
+
+```text
+http://localhost:8081
 ```
 
-Inspect and stop it:
+For example:
 
-``` bash
-docker ps
-docker logs calculator-api
-docker stop calculator-api
-docker rm calculator-api
+```text
+http://localhost:8081/api/v1/add?a=10&b=5
 ```
 
-**Note:** The standalone container and Compose stack both use host port
-`8081`. Stop one before starting the other.
+### 7.3 Networking and Health Checks
 
-## Docker Compose
+The services communicate over a Docker Compose network. Health checks allow Docker to report whether a service is healthy.
 
-The Compose file runs two services:
+The Compose configuration also coordinates service startup so that Nginx waits for the API to become healthy before it is considered ready to start, as configured.
 
--   **`calculator-api`:** Spring Boot API on container port `8081`,
-    accessible to other Compose services.
--   **`nginx`:** Reverse proxy on container port `8080`, mapped to host
-    port `8081`.
+Start the deployment with:
 
-Both services share a dedicated Docker bridge network. The configuration
-includes API and Nginx health checks, `restart: unless-stopped`, and a
-dependency condition so Nginx waits for the API to become healthy.
+```bash
+docker compose up -d
+```
 
-From `calculator-devops/`, run:
+Inspect the running services with:
 
-``` bash
-docker compose up -d --build
+```bash
 docker compose ps
-docker compose logs -f
 ```
 
-Test through Nginx:
+The verified deployment showed both the Calculator API and Nginx containers as healthy.
 
-``` bash
-curl "http://localhost:8081/api/v1/add?a=10&b=5"
-curl "http://localhost:8081/api/v1/subtract?a=10&b=5"
-curl "http://localhost:8081/api/v1/multiply?a=10&b=5"
-curl "http://localhost:8081/api/v1/divide?a=10&b=5"
-curl -fsS "http://localhost:8081/actuator/health"
+## 8. Jenkins CI/CD Pipeline
+
+Jenkins automates the software delivery workflow. The configured job is named:
+
+```text
+calculator-devops-pipeline
 ```
 
-Stop the stack:
+### 8.1 Automatic Triggering
 
-``` bash
-docker compose down
+The Jenkins job uses SCM polling to detect changes in the GitHub repository.
+
+When Jenkins detects a source-control change, it automatically triggers a pipeline build. This avoids requiring a developer to manually start Jenkins after every push.
+
+SCM polling is the configured trigger mechanism for this project.
+
+### 8.2 Pipeline Stages
+
+The Jenkins Declarative Pipeline contains the following stages.
+
+#### Stage 1: Checkout
+
+Jenkins retrieves the latest source code from the configured GitHub repository.
+
+This ensures that the build operates on the committed version of the project.
+
+#### Stage 2: Build
+
+Jenkins executes the Maven package build.
+
+```bash
+mvn clean package -DskipTests
 ```
 
-### Deployment verification already performed
+The build stage checks whether the application can be compiled and packaged. Tests are executed separately in the next stage.
 
-The following commands were run from the repository root:
+#### Stage 3: Test
 
-``` bash
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-docker compose -f calculator-devops/docker-compose.yml ps
+Jenkins runs:
+
+```bash
+mvn test
 ```
 
-Both services were reported `Up` and `healthy`:
+This executes the automated test suite. If a test fails, Maven returns a failure status and the pipeline is marked as failed.
 
--   `calculator-devops-calculator-api-1`, using
-    `ayushmishra0018/calculator-devops:7`
--   `calculator-devops-nginx-1`, publishing host port `8081` to
-    container port `8080`
+#### Stage 4: Publish Test Results
 
-## Tests
+Jenkins collects the JUnit XML reports generated by Maven.
 
-The test sources include:
+The reports provide a structured view of passed, failed, and skipped tests in the Jenkins interface.
 
--   `CalculatorServiceTest.java`: service-level tests for addition,
-    subtraction, multiplication, division, and division by zero.
--   `CalculatorControllerTest.java`: MockMvc controller tests for API
-    responses and HTTP error handling.
--   `CalculatorDevopsApplicationTests.java`: application-level MockMvc
-    tests.
+This also makes it easier to investigate failures without relying only on console output.
 
-Run all tests:
+#### Stage 5: Build Docker Image
 
-``` bash
-./mvnw -B test
+Jenkins builds the Docker image and assigns both a build-specific tag and the `latest` tag.
+
+For example:
+
+```bash
+docker build \
+  -t ayushmishra0018/calculator-devops:13 \
+  -t ayushmishra0018/calculator-devops:latest .
 ```
 
-Maven Surefire writes XML reports under `target/surefire-reports/`.
-Jenkins publishes `calculator-devops/target/surefire-reports/*.xml`
-using the JUnit publisher.
+The build-specific tag links the image to the Jenkins build that produced it.
 
-## Jenkins CI/CD pipeline
+#### Stage 6: Push to Docker Hub
 
-### Job configuration
+Jenkins authenticates to Docker Hub using credentials stored in Jenkins Credentials.
 
--   **Job name:** `calculator-devops-pipeline`
--   **Local Jenkins URL:** `http://localhost:8080`
--   **SCM branch:** `main`
--   **Pipeline script path:** `calculator-devops/Jenkinsfile`
--   **Verified build:** `#7`
+The pipeline pushes the versioned image and the `latest` image to the registry.
 
-### Pipeline stages
+Credentials are not hard-coded into the Git repository. Jenkins manages them separately and makes them available to the pipeline when needed.
 
-1.  **Checkout** --- checks out the configured Git repository.
-2.  **Build** --- runs `./mvnw -B -DskipTests clean package`. Tests are
-    deliberately run in the next stage.
-3.  **Test** --- runs `./mvnw -B test` and publishes Surefire XML
-    reports to Jenkins.
-4.  **Build Docker Image** --- builds the image and tags it with the
-    Jenkins build number and `latest`.
-5.  **Push to Docker Hub** --- logs in using a Jenkins-managed
-    credential, then pushes the versioned tag and `latest`.
-6.  **Deploy with Docker Compose** --- exports the image username and
-    build tag, then runs `docker compose up -d --no-build`.
-7.  **Verify Deployment** --- retries a request to
-    `http://localhost:8081/actuator/health`; on failure, the pipeline
-    prints container status and Compose logs.
+#### Stage 7: Deploy with Docker Compose
 
-The pipeline also timestamps log output, disables concurrent builds,
-prints a success/failure message, and prunes unused Docker images at the
-end.
+The pipeline supplies the image tag for the build and deploys the services using Docker Compose.
 
-Key commands:
+The deployment uses:
 
-``` bash
-./mvnw -B -DskipTests clean package
-./mvnw -B test
+```bash
 docker compose up -d --no-build
-curl -fsS --retry 30 --retry-delay 2 --retry-connrefused \
-  http://localhost:8081/actuator/health
 ```
 
-### Credentials and image tags
+This allows Compose to use the selected image rather than rebuilding the application image during deployment.
 
-The Jenkins credential ID used for Docker Hub is `dockerhub-creds`. The
-pipeline binds the username and token to environment variables during
-the push stage and uses `--password-stdin` for authentication. Do not
-commit access tokens or print them in logs.
+#### Stage 8: Verify Deployment
 
-The image name is `ayushmishra0018/calculator-devops`. The pipeline
-publishes a build-specific tag, such as `:7`, and the rolling `:latest`
-tag.
+After deployment, Jenkins calls the application's Actuator health endpoint.
 
-### Verified Build #7
+A successful health response indicates that the deployed application is responding as expected.
 
-Build #7 finished with `SUCCESS`. The observed results included:
+This stage checks the running deployment, not merely whether the Docker image was built successfully.
 
--   Build and test stages succeeded.
--   Docker image push succeeded.
--   The pushed image digest was
-    `sha256:57f0891d0b0650815caa3611310157b4ee8ffda4f94febda98516ecf71d5fcea`.
--   Docker Compose started/recreated the API and Nginx services.
--   The health request through `http://localhost:8081/actuator/health`
-    returned a response with `"status":"UP"`.
--   The pipeline printed `CI/CD pipeline completed successfully!`.
+#### Stage 9: Post-Build Actions
 
-### Automatic trigger --- pending
+The pipeline defines post-build actions for success and failure.
 
-The Jenkins Build Triggers page was inspected. At that point,
-**neither** `GitHub hook trigger for GITScm polling` nor `Poll SCM` was
-checked. An automatic trigger still needs to be configured and tested.
+These actions provide build status information and send email notifications using the Jenkins Email Extension Plugin. The pipeline also performs Docker image cleanup to remove unused images where possible.
 
-A GitHub webhook requires a Jenkins URL reachable from GitHub's servers.
-`http://localhost:8080` is only a local address and cannot be used as a
-public webhook destination. If a reachable endpoint is not available,
-Poll SCM is an alternative accepted by the assignment.
+### 8.3 Pipeline Summary
 
-### Email notifications --- pending
-
-SMTP configuration and notification delivery for both successful and
-failed builds still need to be configured and tested. This requirement
-should only be marked complete after an actual notification has been
-received.
-
-## Git workflow
-
-The repository uses feature/fix branches and pull requests merged into
-`main`. The recent history checked locally confirmed these merged PRs:
-
--   PR #3 --- Jenkins pipeline feature
--   PR #4 --- Jenkins shell interpolation fix
--   PR #5 --- Jenkins loop syntax fix
--   PR #6 --- Jenkins pipeline cleanup and health-check fix
-
-The local `main` branch was at merge commit `bd3d285`
-(`Merge pull request #6 from Ayush-Mishra-0018/fix/jenkins-pipeline-cleanup`)
-when checked.
-
-Useful commands:
-
-``` bash
-git status
-git fetch origin
-git branch -a
-git log origin/main --oneline -10
+```text
+Developer pushes code to GitHub
+              |
+              v
+      Jenkins SCM Polling
+              |
+              v
+           Checkout
+              |
+              v
+             Build
+              |
+              v
+             Test
+              |
+              v
+      Publish JUnit Reports
+              |
+              v
+       Build Docker Image
+              |
+              v
+       Push to Docker Hub
+              |
+              v
+      Deploy using Compose
+              |
+              v
+      Verify Health Endpoint
+              |
+              v
+      Post-Build Notification
 ```
 
-The application `.gitignore` is at `calculator-devops/.gitignore`; the
-Docker-specific `.dockerignore` controls the Docker build context.
+This workflow connects source-code changes to automated testing and deployment.
 
-## Troubleshooting and security
+## 9. Email Notifications
 
-### Jenkins Docker permissions
+The project uses the Jenkins Email Extension Plugin to send build notifications.
 
-These commands were verified to work:
+The SMTP settings are configured in Jenkins under **Extended E-mail Notification**.
 
-``` bash
-sudo -u jenkins docker ps
-sudo -u jenkins docker compose version
+The configuration uses Gmail SMTP:
+
+| Setting | Value |
+|---|---|
+| SMTP server | `smtp.gmail.com` |
+| SMTP port | `587` |
+| TLS | Enabled |
+| SSL | Disabled |
+| Notification recipient | Configured recipient email address |
+
+The pipeline's post-build actions use the build result to send a formatted notification.
+
+The success notification includes information such as:
+
+- Pipeline job name
+- Build number
+- Build status
+- Docker image tag
+- Link to the Jenkins console output
+
+The successful build notification was received in Gmail.
+
+Email notifications are useful because a developer can learn whether a pipeline succeeded or failed without continuously monitoring the Jenkins interface.
+
+## 10. Verification and Results
+
+The project has been verified through Jenkins test reports, Docker Hub image publication, Docker Compose status, API requests, and the Actuator health endpoint.
+
+### 10.1 Jenkins Build
+
+The Jenkins pipeline completed successfully.
+
+The verified build showed:
+
+- Successful source checkout
+- Successful Maven build
+- All 11 tests passing
+- JUnit reports published
+- Docker image built successfully
+- Image pushed to Docker Hub
+- Docker Compose deployment completed
+- Application health check successful
+- Success notification received
+
+### 10.2 Docker Compose Status
+
+The command:
+
+```bash
+docker compose ps
 ```
 
-### Java version mismatch
+showed the Calculator API and Nginx services running with healthy status.
 
-Check both the shell user and Jenkins service user:
+This confirms that both containers were running and passing their configured health checks at the time of verification.
 
-``` bash
-java -version
-javac -version
-sudo -u jenkins java -version
-sudo -u jenkins javac -version
+### 10.3 Addition Endpoint
+
+Request:
+
+```bash
+curl -sS -i "http://localhost:8081/api/v1/add?a=10&b=5"
 ```
 
-Java 21 JDK was installed and `javac` was corrected to version 21 in the
-current environment.
+Observed result:
 
-### Docker Hub push failure
-
--   Confirm the Jenkins credential ID is `dockerhub-creds`.
--   Confirm the token has the required read/write permissions.
--   Update the token only in Jenkins Credentials.
--   Never put tokens in source control or paste them into logs.
-
-### Deployment health failure
-
-``` bash
-docker ps
-docker compose -f calculator-devops/docker-compose.yml ps
-docker compose -f calculator-devops/docker-compose.yml logs --tail=100
-curl -i http://localhost:8081/actuator/health
+```http
+HTTP/1.1 200
+Content-Type: application/json
 ```
 
-### Security notes
+Response body:
 
--   Keep credentials and secrets out of Git.
--   Keep Docker Hub credentials in Jenkins' credential store.
--   Do not expose Jenkins publicly without proper authentication and
-    network protections.
--   Use version-specific image tags for reproducibility; `latest` is
-    convenient but mutable.
+```json
+{
+  "operation": "add",
+  "a": 10.0,
+  "b": 5.0,
+  "result": 15.0
+}
+```
 
-## Status and remaining work
+This verifies that the request reaches the application through Nginx and returns the expected arithmetic result.
 
-### Completed and verified
+### 10.4 Division-by-Zero Endpoint
 
--   [x] Calculator REST endpoints.
--   [x] Structured division-by-zero error response.
--   [x] Actuator health endpoint.
--   [x] JUnit 5 service tests and MockMvc controller/application tests.
--   [x] Maven build and test workflow.
--   [x] Multi-stage Java 21 Dockerfile.
--   [x] Non-root runtime user and `.dockerignore`.
--   [x] Docker Compose API + Nginx stack.
--   [x] Compose health checks, network, dependency condition, and
-    restart policies.
--   [x] Public Docker Hub image and versioned image push.
--   [x] Jenkins build, tests/report publishing, image build/push,
-    deployment, and health verification.
--   [x] Jenkins Build #7 succeeded.
--   [x] Both Compose services observed healthy.
--   [x] Feature/fix branches and merged pull requests confirmed.
+Request:
 
-### Remaining work
+```bash
+curl -sS -i "http://localhost:8081/api/v1/divide?a=10&b=0"
+```
 
--   [ ] Configure and verify an automatic Jenkins trigger (GitHub
-    webhook or Poll SCM).
--   [ ] Configure SMTP and test success/failure email notifications.
--   [ ] Push a small change and capture evidence of automatic pipeline
-    execution.
--   [ ] Capture screenshots: successful Jenkins run, published test
-    results, email notification, `docker ps`, and sample API responses.
--   [ ] Prepare the required 2--3 page PDF report with architecture
-    diagram, pipeline stages, challenges/solutions, and screenshots.
--   [ ] Demonstrate a code push, pipeline run, deployment, and healthy
-    API.
+Observed result:
 
-## Project links
+```http
+HTTP/1.1 400
+Content-Type: application/json
+```
 
--   **GitHub repository:**
-    https://github.com/Ayush-Mishra-0018/SPE_MINI_PROJECT
--   **Docker Hub image:**
-    https://hub.docker.com/r/ayushmishra0018/calculator-devops
--   **Jenkins (local):** http://localhost:8080
--   **Deployed API (local):** http://localhost:8081
--   **Health endpoint:** http://localhost:8081/actuator/health
+Response body:
 
-------------------------------------------------------------------------
+```json
+{
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Division by zero is not allowed",
+  "path": "/api/v1/divide"
+}
+```
 
-This README records the work completed and verified so far. Update the
-checklist when the remaining trigger, email, report, and demonstration
-tasks are complete.
+This verifies that the API returns the expected HTTP error response for division by zero.
+
+### 10.5 Health Endpoint
+
+Request:
+
+```bash
+curl -sS -i "http://localhost:8081/actuator/health"
+```
+
+Observed response body:
+
+```json
+{
+  "groups": ["liveness", "readiness"],
+  "status": "UP"
+}
+```
+
+This verifies that the deployed application's health endpoint responds successfully through Nginx.
+
+## 11. Git and Version Control
+
+Git and GitHub are used to maintain the source code and track changes.
+
+The repository includes meaningful commits documenting project development. Feature branches and merges were used during development, providing a history of how the implementation evolved.
+
+Version control provides several benefits:
+
+- Tracks changes to source code and configuration.
+- Makes it possible to inspect earlier versions.
+- Provides a record of project development.
+- Connects source-code changes to automated Jenkins builds.
+- Helps prevent accidental inclusion of generated files and local configuration.
+
+The `.gitignore` file excludes files that should not be committed, such as generated build output and local IDE files.
+
+The `.dockerignore` file serves a different purpose: it excludes unnecessary files from the Docker build context.
+
+Sensitive credentials are managed through Jenkins Credentials rather than hard-coded into the pipeline.
+
+## 12. Challenges and Design Decisions
+
+### 12.1 Separating Build and Test Stages
+
+The pipeline separates compilation and packaging from automated testing.
+
+This makes the workflow easier to understand and allows the test stage to provide a clear result before the image is published and deployed.
+
+### 12.2 Publishing JUnit Reports
+
+Executing tests in Jenkins is not enough by itself. Publishing JUnit XML reports makes test outcomes visible in the Jenkins interface and provides a convenient way to inspect failures.
+
+### 12.3 Using Versioned Docker Images
+
+A build-specific Docker tag identifies the image created by a particular pipeline run.
+
+This is more traceable than relying exclusively on the `latest` tag because the build-specific tag records which image corresponds to a particular build.
+
+### 12.4 Deploying Multiple Services
+
+Docker Compose manages both the Calculator API and Nginx. It defines their networking, health checks, restart behaviour, and startup dependency.
+
+This allows the deployment to be started and inspected through a small set of Compose commands rather than managing each container independently.
+
+### 12.5 Verifying the Running Application
+
+A successful image build does not guarantee that the application is available after deployment.
+
+The pipeline therefore checks the Actuator health endpoint. The API was also tested manually through Nginx to verify successful arithmetic requests and error handling.
+
+### 12.6 Configuring Email Notifications
+
+Jenkins requires correct SMTP configuration to send notifications.
+
+The Extended E-mail Notification configuration was set to use Gmail SMTP on port `587`, with TLS enabled and SSL disabled. The successful pipeline notification was received in Gmail.
+
+## 13. Conclusion
+
+This project demonstrates an end-to-end CI/CD workflow for a Spring Boot Calculator REST API.
+
+It integrates GitHub version control, Jenkins automation, Maven builds, JUnit testing, test-report publication, Docker image creation, Docker Hub publishing, Docker Compose deployment, Actuator health checks, and email notifications.
+
+The verified pipeline passed all 11 automated tests, published the Docker image, deployed the Calculator API and Nginx containers, and returned successful API and health-check responses.
+
+The project illustrates how a code change can move through an automated delivery process with repeatable builds, automated tests, containerized deployment, and visible pipeline results.
+
+---
+
+**Student:** Ayush Mishra  
+**Roll Number:** IMT2023129  
+**Course:** Software Production Engineering  
+**Institute:** IIIT Bangalore
