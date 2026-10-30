@@ -700,7 +700,7 @@ It integrates GitHub version control, Jenkins automation, Maven builds, JUnit te
 
 The verified pipeline passed all 11 automated tests, published the Docker image, deployed the Calculator API and Nginx containers, and returned successful API and health-check responses.
 
-The project illustrates how a code change can move through an automated delivery process with repeatable builds, automated tests, containerized deployment, and visible pipeline results.
+The project illustrates how a code change can move through an automated delivery process with repeatable builds, automated tests, containerized deployment, & visible pipeline results.
 
 ---
 
